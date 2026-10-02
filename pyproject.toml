@@ -1,0 +1,30 @@
+[project]
+name = "mcps"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Pelumi Adejuwon", email = "140279753+PELUMIADEJUWON@users.noreply.github.com" }
+]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastmcp>=3.4.7",
+    "gradio>=6.25.0",
+    "mcp>=1.29.0",
+    "openai",
+    "openai-agents",
+    "pydantic-settings>=2.15.0",
+    "python-dotenv",
+    "requests>=2.34.2",
+    "crewai",
+    "crewai-tools[mcp]",
+    "litellm>=1.103.2",
+    "mcpadapt>=0.1.20",
+]
+
+[project.scripts]
+mcps = "mcps:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
