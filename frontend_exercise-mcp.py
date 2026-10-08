@@ -6,6 +6,9 @@ import streamlit as st
 load_dotenv(override=True)
 
 key = os.getenv("API_TOKEN")
+if not key:                                    
+    st.error("API_TOKEN is missing from .env")
+    st.stop()
 
 os.environ["OPENROUTER_API_KEY"] = key
 
@@ -31,28 +34,31 @@ def convert_currency(
 ) -> str:
     """Convert an amount from one currency to another using the MCP server."""
 
-    r = requests.post(
-        "http://127.0.0.1:8000/mcp",
-        headers={
-            "Accept": "application/json, text/event-stream",
-            "Content-Type": "application/json"
-        },
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/call",
-            "params": {
-                "name": "convert_currency",
-                "arguments": {
-                    "amount": amount,
-                    "from_currency": from_currency,
-                    "to_currency": to_currency
+    try:                                       
+        r = requests.post(
+            "http://127.0.0.1:8000/mcp",
+            headers={
+                "Accept": "application/json, text/event-stream",
+                "Content-Type": "application/json"
+            },
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "convert_currency",
+                    "arguments": {
+                        "amount": amount,
+                        "from_currency": from_currency,
+                        "to_currency": to_currency
+                    }
                 }
-            }
-        }
-    )
-
-    r.raise_for_status()
+            },
+            timeout=15,
+        )
+        r.raise_for_status()
+    except requests.RequestException as e:
+        return f"Could not reach the currency server: {e}"
 
     data = r.json()
 
@@ -69,6 +75,7 @@ currency_agent = Agent(
     backstory="You always use the convert_currency tool and never guess rates.",
     tools=[convert_currency],
     llm=llm,
+    max_iter=3,
     verbose=True
 )
 
@@ -102,7 +109,9 @@ to_currency = st.selectbox(
 
 
 if st.button("Convert"):
-
+    if from_currency == to_currency:           
+        st.warning("Pick two different currencies.")
+        st.stop()
     conversion_task = Task(
         description=f"""
         Convert {amount} {from_currency} to {to_currency}
@@ -124,6 +133,4 @@ if st.button("Convert"):
     with st.spinner("Converting..."):
         result = crew.kickoff()
 
-    st.success("Conversion complete!")
-
-    st.write(result)
+    st.success(result.raw)
