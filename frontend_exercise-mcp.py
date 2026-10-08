@@ -1,35 +1,67 @@
 from dotenv import load_dotenv
-import os, json, requests
+import os
+import requests
+import streamlit as st
 
 load_dotenv(override=True)
+
 key = os.getenv("API_TOKEN")
-print("KEY:", key[:12] if key else "NOT FOUND", "| length:", len(key) if key else 0)
 
 os.environ["OPENROUTER_API_KEY"] = key
 
 from crewai import Agent, Task, Crew, LLM
 from crewai.tools import tool
 
+
+
+
 llm = LLM(
     model="openrouter/openai/gpt-4o-mini",
     base_url="https://openrouter.ai/api/v1",
-    api_key=os.getenv("API_TOKEN")
+    api_key=key
 )
 
+
+
 @tool("convert_currency")
-def convert_currency(amount: float, from_currency: str, to_currency: str) -> str:
-    """Convert an amount from one currency to another."""
+def convert_currency(
+    amount: float,
+    from_currency: str,
+    to_currency: str
+) -> str:
+    """Convert an amount from one currency to another using the MCP server."""
+
     r = requests.post(
         "http://127.0.0.1:8000/mcp",
-        headers={"Accept": "application/json, text/event-stream",
-                 "Content-Type": "application/json"},
-        json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-              "params": {"name": "convert_currency",
-                         "arguments": {"amount": amount,
-                                       "from_currency": from_currency,
-                                       "to_currency": to_currency}}}
+        headers={
+            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json"
+        },
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "convert_currency",
+                "arguments": {
+                    "amount": amount,
+                    "from_currency": from_currency,
+                    "to_currency": to_currency
+                }
+            }
+        }
     )
-    return r.text
+
+    r.raise_for_status()
+
+    data = r.json()
+
+    if "error" in data:
+        return f"MCP error: {data['error']['message']}"
+
+    return data["result"]["content"][0]["text"]
+
+
 
 currency_agent = Agent(
     role="Currency Converter",
@@ -40,14 +72,58 @@ currency_agent = Agent(
     verbose=True
 )
 
-conversion_task = Task(
-    description="Convert 100 USD to NGN using the convert_currency tool.",
-    expected_output="A clear currency conversion result.",
-    agent=currency_agent
+
+# =========================
+# STREAMLIT FRONTEND
+# =========================
+
+st.title("💱 Currency Converter")
+
+st.write("Convert currencies using CrewAI and MCP.")
+
+
+amount = st.number_input(
+    "Enter amount",
+    min_value=0.01,
+    value=100.00
 )
 
-crew = Crew(agents=[currency_agent], tasks=[conversion_task], verbose=True)
 
-result = crew.kickoff()
-print("\nFINAL RESULT:")
-print(result)
+from_currency = st.selectbox(
+    "From",
+    ["USD", "GBP", "EUR", "NGN"]
+)
+
+
+to_currency = st.selectbox(
+    "To",
+    ["USD", "GBP", "EUR", "NGN"]
+)
+
+
+if st.button("Convert"):
+
+    conversion_task = Task(
+        description=f"""
+        Convert {amount} {from_currency} to {to_currency}
+        using the convert_currency tool.
+
+        Do not guess the exchange rate.
+        Use the tool to get the conversion result.
+        """,
+        expected_output="A clear currency conversion result.",
+        agent=currency_agent
+    )
+
+    crew = Crew(
+        agents=[currency_agent],
+        tasks=[conversion_task],
+        verbose=True
+    )
+
+    with st.spinner("Converting..."):
+        result = crew.kickoff()
+
+    st.success("Conversion complete!")
+
+    st.write(result)

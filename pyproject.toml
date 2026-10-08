@@ -20,6 +20,7 @@ dependencies = [
     "crewai-tools[mcp]",
     "litellm>=1.103.2",
     "mcpadapt>=0.1.20",
+    "streamlit>=1.65.0",
 ]
 
 [project.scripts]
